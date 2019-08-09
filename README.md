@@ -1,6 +1,6 @@
 # Homework 1
 
-Due Date: 8/30/2019
+Due Date: 9/06/2019
 
 Creating a basic UI is necessary to understanding how to organize shiny applications for users. Students are expected to design and create a basic layout using one of the generic datasets provided with base R or a common package (mtcars, diamonds, starwars, etc). 
 
