@@ -2,6 +2,19 @@
 
 Due Date: 9/06/2019
 
-Creating a basic UI is necessary to understanding how to organize shiny applications for users. Students are expected to design and create a basic layout using one of the generic datasets provided with base R or a common package (mtcars, diamonds, starwars, etc). 
+Nearly every Shiny application requires you to translate user inputs to allow them to manipulate the data you visualize for them. For this assignment you must use data from an open data website (you may download and clean the data and write it as a CSV).
 
-The UI should have two (2) input elements and one (1) plot and/or data table. The input elements do not have to interact with the plots or data tables for this assignment, they simply must be present in the UI.
+Data Resources:
+* WPRDC: https://data.wprdc.org/
+* Data World: https://data.world/datasets/data
+* US Open Data: https://www.data.gov/
+*	EU Open Data: http://data.europa.eu/euodp/en/data/
+*	Just about any major US City
+
+Directions: 
+* Create three (3) different kinds of plots/figures 
+* Use DT to create one (1) data table
+* Include at least three (3) different types of inputs
+* One (1) functioning downloadButton() 
+* One (1) observer in the server
+* Inputs must use reactivity in a logical manner with all outputs displayed to users
