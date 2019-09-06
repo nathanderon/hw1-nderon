@@ -15,7 +15,7 @@ ipak <- function(pkg){
   sapply(pkg, require, character.only = TRUE)
 }
 
-packages <- c("ggplot2", "dplyr", "shiny", "DT", "tools")
+packages <- c("ggplot2", "dplyr", "shiny", "DT", "tools", "shinyjs", "shinythemes")
 ipak(packages)
 
 #Load data
@@ -29,10 +29,13 @@ blotter_data$date <- format(blotter_data$INCIDENTTIME, "%m-%d")
 blotter_data$date <- as.POSIXct(x = blotter_data$date, format = "%m-%d")
 blotter_data$type <- cut(blotter_data$HIERARCHY, c(-Inf, 9, 98, Inf), labels = c("Type 1 - Major Crime", "Type 2 - Minor Crime", "No Data"))
 blotter_data$INCIDENTTIME <- as.POSIXct(blotter_data$INCIDENTTIME) #to avoid POSIXlt error
+neighborhoods <- sort(unique(blotter_data$INCIDENTNEIGHBORHOOD))
 
 # Define UI
-ui <- fluidPage(
-   
+ui <- fluidPage(theme = shinytheme("sandstone"),
+  
+  useShinyjs(), 
+  
    # Application title
    titlePanel("Pittsburgh Police Blotter Data"),
    
@@ -40,63 +43,128 @@ ui <- fluidPage(
    sidebarLayout(
       sidebarPanel(
         
+        #City council district input
          checkboxGroupInput(inputId = "selected_districts",
                             label = "Select Council District(s)",
                             choices = c(1:9),
                             selected = c(1:9)
         ),
         
+        #date range input
         dateRangeInput(inputId = "date_range",
                        label = "Date Range: yyyy-mm-dd",
                        start = "2009-01-01",
                        end = "2019-01-01",
-                       startview = "year")
+                       startview = "year"),
+        
+        #Neighborhood selection, adjusted from https://stackoverflow.com/questions/24916115/select-deselect-all-button-for-shiny-variable-selection
+        radioButtons(
+          inputId="radio",
+          label="Neighborhood Selection Type:",
+          choices=list(
+            "All",
+            "Manual Select"
+          ),
+          selected="All"),
+        
+        #If manual selection used above, give neighborhood options
+        conditionalPanel(
+          condition = "input.radio != 'All'",
+          checkboxGroupInput(
+            'neighborhoods', 
+            'Neighborhoods to Show:',
+            choices= neighborhoods, 
+            selected = c("Central Oakland", "Shadyside", "Squirrel Hill North", "Squirrel Hill South")
+          )
+        ),
+        
+        downloadButton("downloadData", "Download")
+        
       ),
       
       # Show a plot of the generated distribution
       mainPanel(
          plotOutput(outputId = "time"),
-         plotOutput(outputId = "date")
+         br(),
+         plotOutput(outputId = "date"),
+         br(),
+         plotOutput(outputId = "hier"),
+         br(),
+         dataTableOutput(outputId = "DT")
       )
    )
 )
 
 # Define server logic required to draw a histogram
-server <- function(input, output) {
+server <- function(input, output, session) {
   
-  #Council district filter
+  #Neighborhood filter
+  data <- reactive({
+    if(input$radio == "All"){
+      blotter_data
+    } else {
+      filter(blotter_data, INCIDENTNEIGHBORHOOD %in% input$neighborhoods)
+    }
+  })
+  
+  #Council district and date filter
   blotter_subset <- reactive({
     req(input$selected_districts)
-    filter(blotter_data, COUNCIL_DISTRICT %in% input$selected_districts & 
+    filter(data(), COUNCIL_DISTRICT %in% input$selected_districts & 
              between(INCIDENTTIME, as.POSIXct(input$date_range[[1]]), as.POSIXct(input$date_range[[2]])))
   })
-
-  #Decrease data size
+  
+  #Decrease data size or populate small n user selections ~might be misleading~
   blotter_sample <- reactive({
-    sample_n(blotter_subset(), 5000)
+    sample_n(blotter_subset(), 5000, replace = T)
   })
-   
-  #Map of incidents, date input, hierarchy input
   
-  #time plot, hierarchy input, zone/district/neighborhood input?
+  #Function that returns logical value for observer below
+  is.all <- function(x){
+    if(x == "All"){
+      return(T)
+    } else {
+      return(F)
+    }
+  }
   
+  #observer that hides district selection if manual neighborhood selection is used
+  observe({
+    toggle(id = "selected_districts", condition = is.all(input$radio))
+  })
+  
+  #time vs blotter count plot
   output$time <- renderPlot({
-    ggplot(blotter_sample(), aes(x = blotter_sample()$time)) + geom_freqpoly(stat = "bin", binwidth = 3600)
+    ggplot(blotter_sample(), aes(x = blotter_sample()$time)) + geom_freqpoly(stat = "bin", binwidth = 3600) +
+      labs(x = "Time of Day (Ignore data date)", y = "Count", title = "Count of Police Blotter Incidents by Time of Day")
   })
   
+  #time of year vs blotter count plot
   output$date <- renderPlot({
     ggplot(blotter_sample(), aes(x = blotter_sample()$date, fill = type)) + 
-      geom_histogram(stat = "bin", bins = 12) #, color = cut(blotter_sample()$HIERARCHY, breaks = c(-1, 9, 99)))
+      geom_histogram(stat = "bin", bins = 12) +
+      labs(x = "Time of Year (Ignore data year)", y = "Count", title = "Count of Police Blotter Incidents by Time of Year and Type")
   })
   
-  #Count by hierarchy and neighborhood, date input
+  #hierarchy status vs time plot
+  output$hier <- renderPlot({
+    ggplot(blotter_sample(), aes(x = type, y = time)) +
+      geom_violin(scale = "area", fill = "forest green") +
+      labs(x = "UCR Code Types", y = "Time of Day (Ignore data date)", Title = "UCR Code Type Distribution by Time of Day")
+  })
   
-  #data table of ??
+  #Datatable output
+  output$DT <- renderDataTable({
+    blotter_subset()
+  })
   
-  #Download button
-  
-  #Observer~~
-
+  #csv download
+  output$downloadData <- downloadHandler(
+    filename = "PGH_Blotter_Data_Subset.csv",
+    content = function(file){
+      write.csv(blotter_subset(), file, row.names = F)
+    }
+  )
 }
 
 # Run the application 
